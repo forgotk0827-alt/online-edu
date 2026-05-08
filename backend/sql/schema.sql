@@ -1,0 +1,158 @@
+CREATE DATABASE IF NOT EXISTS online_education DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE online_education;
+
+CREATE TABLE IF NOT EXISTS users (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  username VARCHAR(150) NOT NULL UNIQUE,
+  password VARCHAR(128) NOT NULL,
+  nickname VARCHAR(100),
+  email VARCHAR(254),
+  role VARCHAR(20) DEFAULT 'student',
+  avatar VARCHAR(255),
+  status VARCHAR(30) DEFAULT '正常',
+  is_active TINYINT DEFAULT 1,
+  is_staff TINYINT DEFAULT 0,
+  create_time DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS student_users (
+  student_users_id INT PRIMARY KEY AUTO_INCREMENT,
+  student_name VARCHAR(100),
+  student_gender VARCHAR(20),
+  student_id DOUBLE,
+  examine_state VARCHAR(30),
+  user_id INT,
+  create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+  update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS teacher_users (
+  teacher_users_id INT PRIMARY KEY AUTO_INCREMENT,
+  teachers_name VARCHAR(100),
+  teaching_subjects VARCHAR(100),
+  teacher_id DOUBLE,
+  examine_state VARCHAR(30),
+  user_id INT,
+  create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+  update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS course_materials (
+  course_materials_id INT PRIMARY KEY AUTO_INCREMENT,
+  course_number VARCHAR(50),
+  teacher_users INT,
+  teachers_name VARCHAR(100),
+  teaching_semester VARCHAR(50),
+  course_name VARCHAR(150),
+  teaching_type VARCHAR(80),
+  course_prices DOUBLE DEFAULT 0,
+  course_highlights VARCHAR(255),
+  course_images VARCHAR(255),
+  course_introduction TEXT,
+  hits INT DEFAULT 0,
+  praise_len INT DEFAULT 0,
+  collect_len INT DEFAULT 0,
+  create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+  update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS online_video (
+  online_video_id INT PRIMARY KEY AUTO_INCREMENT,
+  teacher_users INT,
+  teachers_name VARCHAR(100),
+  video_name VARCHAR(150),
+  video_duration VARCHAR(50),
+  video_origin VARCHAR(80),
+  video_type VARCHAR(80),
+  video_content VARCHAR(255),
+  video_poster VARCHAR(255),
+  hits INT DEFAULT 0,
+  praise_len INT DEFAULT 0,
+  collect_len INT DEFAULT 0,
+  comment_len INT DEFAULT 0,
+  create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+  update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS forum (
+  forum_id MEDIUMINT PRIMARY KEY AUTO_INCREMENT,
+  user_id MEDIUMINT,
+  nickname VARCHAR(100),
+  praise_len INT DEFAULT 0,
+  hits INT DEFAULT 0,
+  title VARCHAR(150),
+  keywords VARCHAR(150),
+  description VARCHAR(255),
+  url VARCHAR(255),
+  tag VARCHAR(80),
+  img TEXT,
+  create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  avatar VARCHAR(255),
+  type VARCHAR(80),
+  istop INT DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS education_news (
+  news_id INT PRIMARY KEY AUTO_INCREMENT,
+  title VARCHAR(180),
+  category VARCHAR(80),
+  tag VARCHAR(100),
+  cover_image VARCHAR(255),
+  summary VARCHAR(255),
+  content TEXT,
+  author VARCHAR(100),
+  hits INT DEFAULT 0,
+  praise_len INT DEFAULT 0,
+  comment_len INT DEFAULT 0,
+  publish_state VARCHAR(30) DEFAULT '已发布',
+  create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+  update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS news_comments (
+  comment_id INT PRIMARY KEY AUTO_INCREMENT,
+  news_id INT,
+  user_id INT,
+  nickname VARCHAR(100),
+  avatar VARCHAR(255),
+  content TEXT,
+  create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+  update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS notices (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  title VARCHAR(150),
+  category VARCHAR(80),
+  content TEXT,
+  publish_state VARCHAR(30) DEFAULT '已发布',
+  create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+  update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS banners (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  title VARCHAR(120),
+  image VARCHAR(255),
+  link VARCHAR(255),
+  sort INT DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS orders (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT,
+  course_id INT,
+  amount DOUBLE DEFAULT 0,
+  pay_state VARCHAR(30) DEFAULT '已支付',
+  create_time DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS behavior_records (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT,
+  course_id INT,
+  behavior VARCHAR(20),
+  weight INT DEFAULT 1,
+  create_time DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
