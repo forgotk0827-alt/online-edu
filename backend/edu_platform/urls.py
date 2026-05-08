@@ -22,6 +22,7 @@ urlpatterns = [
     path("api/news/<int:pk>/", views.news_detail),
     path("api/news/<int:pk>/comments/", views.news_comments),
     path("api/notices/", views.notice_list),
+    path("api/notices/<int:pk>/", views.notice_detail),
     path("api/banners/", views.banner_list),
     path("api/admin/banners/", views.banner_manage),
     path("api/interactions/", views.interaction_list),

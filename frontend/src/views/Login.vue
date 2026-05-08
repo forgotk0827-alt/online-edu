@@ -37,6 +37,7 @@
 import { ElMessage } from "element-plus";
 import { computed, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
+import { emitAuthChange, setAuth } from "../services/auth";
 import { api } from "../services/api";
 import { loadDatabaseData, syncUser } from "../services/store";
 
@@ -94,13 +95,12 @@ async function submit() {
       password: form.password
     });
     if (data.code && data.code !== 200) throw new Error(data.message);
-    localStorage.setItem("token", data.data.token);
-    localStorage.setItem("user", JSON.stringify(data.data.user || {}));
+    setAuth("client", data.data.token, data.data.user || {});
     if (data.data.user?.username) {
       syncUser(data.data.user);
     }
     loadDatabaseData();
-    window.dispatchEvent(new Event("storage"));
+    emitAuthChange();
     ElMessage.success("登录成功");
     router.push("/");
   } catch (error) {

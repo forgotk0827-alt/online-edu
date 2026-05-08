@@ -73,6 +73,7 @@ class OnlineVideo(models.Model):
     video_type = models.CharField(max_length=80)
     video_content = models.CharField(max_length=255, blank=True)
     video_poster = models.CharField(max_length=255, blank=True)
+    video_url = models.CharField(max_length=500, blank=True)
     hits = models.IntegerField(default=0)
     praise_len = models.IntegerField(default=0)
     collect_len = models.IntegerField(default=0)

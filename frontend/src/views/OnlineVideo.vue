@@ -82,7 +82,7 @@ const videoRows = computed(() => [
     type: item.type || item.video_type,
     duration: item.duration || item.video_duration,
     poster: item.poster || item.video_poster,
-    src: item.src || ""
+    src: item.src || item.video_url || ""
   }))
 ]);
 
@@ -116,6 +116,7 @@ function handleUpload(event) {
     video_type: file.type || "video",
     poster,
     video_poster: poster,
+    video_url: src,
     src
   };
   addRow("videos", row);

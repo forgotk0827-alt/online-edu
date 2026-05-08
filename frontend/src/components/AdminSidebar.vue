@@ -26,23 +26,35 @@
 </template>
 
 <script setup>
+import { computed, ref, onBeforeUnmount, onMounted } from "vue";
 import { useRouter } from "vue-router";
+import { clearAuth, emitAuthChange, getAuthUser } from "../services/auth";
 
 const router = useRouter();
-let user = null;
-
-try {
-  user = JSON.parse(localStorage.getItem("user") || "null");
-} catch {
-  user = null;
-}
+const authVersion = ref(0);
+const user = computed(() => {
+  authVersion.value;
+  return getAuthUser("admin");
+});
 
 function logout() {
-  localStorage.removeItem("token");
-  localStorage.removeItem("user");
-  window.dispatchEvent(new Event("storage"));
+  clearAuth("admin");
+  authVersion.value += 1;
+  emitAuthChange();
   router.push("/admin/login");
 }
+
+function onAuthChange() {
+  authVersion.value += 1;
+}
+
+onMounted(() => {
+  window.addEventListener("storage", onAuthChange);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("storage", onAuthChange);
+});
 </script>
 
 <style scoped>

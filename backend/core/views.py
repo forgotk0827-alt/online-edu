@@ -154,14 +154,21 @@ def upload_file(request):
     file = request.FILES.get("file")
     if not file:
         return fail("未上传文件")
-    if file.size > 20 * 1024 * 1024:
-        return fail("文件不能超过 20MB")
-    allowed = (".jpg", ".jpeg", ".png", ".gif", ".mp4", ".pdf", ".doc", ".docx")
-    if not file.name.lower().endswith(allowed):
+
+    ext = file.name.lower().rsplit(".", 1)[-1] if "." in file.name else ""
+    video_exts = {"mp4", "webm", "ogg", "mov", "m4v"}
+    allowed_exts = {"jpg", "jpeg", "png", "gif", "mp4", "webm", "ogg", "mov", "m4v", "pdf", "doc", "docx"}
+    if ext not in allowed_exts:
         return fail("文件类型不支持")
-    path = default_storage.save(f"uploads/{timezone.now().strftime('%Y%m%d%H%M%S')}_{file.name}", file)
+
+    max_size = 500 * 1024 * 1024 if ext in video_exts else 20 * 1024 * 1024
+    if file.size > max_size:
+        return fail("视频文件不能超过 500MB" if ext in video_exts else "文件不能超过 20MB")
+
+    folder = "videos" if ext in video_exts else "uploads"
+    path = default_storage.save(f"{folder}/{timezone.now().strftime('%Y%m%d%H%M%S')}_{file.name}", file)
     url = default_storage.url(path)
-    return ok({"path": request.build_absolute_uri(url)})
+    return ok({"path": request.build_absolute_uri(url), "name": file.name, "size": file.size})
 
 
 def course_queryset(request):
@@ -235,6 +242,10 @@ def buy_course(request, pk):
     return ok({"order_id": order.id, "pay_state": order.pay_state})
 
 
+VIDEO_FIELDS = ["online_video_id", "teachers_name", "video_name", "video_duration", "video_origin", "video_type", "video_content", "video_poster", "video_url", "hits", "praise_len", "collect_len", "comment_len"]
+
+
+@csrf_exempt
 def video_list(request):
     qs = OnlineVideo.objects.all().order_by("-online_video_id")
     keyword = request.GET.get("keyword") or request.GET.get("video_name")
@@ -243,25 +254,36 @@ def video_list(request):
         qs = qs.filter(video_name__icontains=keyword)
     if video_type:
         qs = qs.filter(video_type__icontains=video_type)
-    fields = ["online_video_id", "teachers_name", "video_name", "video_duration", "video_origin", "video_type", "video_content", "video_poster", "hits", "praise_len", "collect_len", "comment_len"]
     if request.method == "GET":
-        return ok(paginate(request, qs, fields))
+        return ok(paginate(request, qs, VIDEO_FIELDS))
     user, error = require_user(request)
     if error:
         return error
     if user.role not in {"teacher", "admin"}:
         return fail("只有教师或管理员可以发布视频", 403)
-    video = OnlineVideo.objects.create(**body(request))
-    return ok(serialize(video, fields))
+    data = body(request)
+    video = OnlineVideo.objects.create(
+        teacher_users=user.id,
+        teachers_name=data.get("teachers_name") or user.nickname or user.username,
+        video_name=data.get("video_name", ""),
+        video_duration=data.get("video_duration", ""),
+        video_origin=data.get("video_origin", ""),
+        video_type=data.get("video_type", ""),
+        video_content=data.get("video_content", ""),
+        video_poster=data.get("video_poster", ""),
+        video_url=data.get("video_url", ""),
+    )
+    return ok(serialize(video, VIDEO_FIELDS))
 
 
+@csrf_exempt
 def video_detail(request, pk):
     video = OnlineVideo.objects.filter(pk=pk).first()
     if not video:
         return fail("视频不存在", 404)
     video.hits += 1
     video.save(update_fields=["hits"])
-    return ok(serialize(video, ["online_video_id", "teachers_name", "video_name", "video_duration", "video_origin", "video_type", "video_content", "video_poster", "hits", "praise_len", "collect_len", "comment_len"]))
+    return ok(serialize(video, VIDEO_FIELDS))
 
 
 @csrf_exempt
@@ -343,9 +365,47 @@ def news_comments(request, pk):
     return ok(serialize(comment, ["comment_id", "nickname", "avatar", "content", "create_time"]))
 
 
+@csrf_exempt
 def notice_list(request):
     qs = Notice.objects.filter(publish_state="已发布").order_by("-id")
-    return ok(paginate(request, qs, ["id", "title", "category", "content", "create_time", "update_time"]))
+    fields = ["id", "title", "category", "content", "publish_state", "create_time", "update_time"]
+    if request.method == "GET":
+        return ok(paginate(request, qs, fields))
+    user, error = require_admin(request)
+    if error:
+        return error
+    if request.method == "POST":
+        data = body(request)
+        notice = Notice.objects.create(
+            title=data.get("title", ""),
+            category=data.get("category", ""),
+            content=data.get("content", ""),
+            publish_state=data.get("publish_state", "已发布"),
+        )
+        return ok(serialize(notice, fields))
+    return fail("请求方法不支持", 405)
+
+
+@csrf_exempt
+def notice_detail(request, pk):
+    notice = Notice.objects.filter(pk=pk).first()
+    if not notice:
+        return fail("公告不存在", 404)
+    user, error = require_admin(request)
+    if error:
+        return error
+    fields = ["id", "title", "category", "content", "publish_state", "create_time", "update_time"]
+    if request.method in {"PUT", "PATCH"}:
+        data = body(request)
+        for key in ["title", "category", "content", "publish_state"]:
+            if key in data:
+                setattr(notice, key, data[key])
+        notice.save()
+        return ok(serialize(notice, fields))
+    if request.method == "DELETE":
+        notice.delete()
+        return ok()
+    return fail("请求方法不支持", 405)
 
 
 def banner_list(request):
@@ -495,6 +555,7 @@ def admin_statistics(request):
     )
 
 
+@csrf_exempt
 def video_detail(request, pk):
     video = OnlineVideo.objects.filter(pk=pk).first()
     if not video:
@@ -505,9 +566,19 @@ def video_detail(request, pk):
             return error
         video.delete()
         return ok()
+    if request.method in {"PUT", "PATCH"}:
+        _, error = require_admin(request)
+        if error:
+            return error
+        data = body(request)
+        for key in ["teachers_name", "video_name", "video_duration", "video_origin", "video_type", "video_content", "video_poster", "video_url"]:
+            if key in data:
+                setattr(video, key, data[key])
+        video.save()
+        return ok(serialize(video, VIDEO_FIELDS))
     video.hits += 1
     video.save(update_fields=["hits"])
-    return ok(serialize(video, ["online_video_id", "teachers_name", "video_name", "video_duration", "video_origin", "video_type", "video_content", "video_poster", "hits", "praise_len", "collect_len", "comment_len"]))
+    return ok(serialize(video, VIDEO_FIELDS))
 
 
 def forum_detail(request, pk):

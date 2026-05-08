@@ -16,6 +16,7 @@ import PersonalCenter from "../views/PersonalCenter.vue";
 import Register from "../views/Register.vue";
 import TeacherCourses from "../views/TeacherCourses.vue";
 import WebsiteNotice from "../views/WebsiteNotice.vue";
+import { getAuthToken, getAuthUser } from "../services/auth";
 
 const routes = [
   { path: "/", component: Home },
@@ -61,14 +62,10 @@ router.beforeEach((to) => {
   if (!to.matched.some((record) => record.meta.requiresAdmin)) {
     return true;
   }
-  try {
-    const user = JSON.parse(localStorage.getItem("user") || "null");
-    const token = localStorage.getItem("token");
-    if (token && user?.role === "admin") {
-      return true;
-    }
-  } catch {
-    // Fall through to login.
+  const user = getAuthUser("admin");
+  const token = getAuthToken("admin");
+  if (token && user?.role === "admin") {
+    return true;
   }
   return { path: "/admin/login", query: { redirect: to.fullPath } };
 });

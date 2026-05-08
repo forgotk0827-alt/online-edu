@@ -28,21 +28,18 @@
 <script setup>
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
+import { clearAuth, emitAuthChange, getAuthToken, getAuthUser } from "../services/auth";
 
 const router = useRouter();
 const open = ref(false);
 const authVersion = ref(0);
 const isLoggedIn = computed(() => {
   authVersion.value;
-  return Boolean(localStorage.getItem("token"));
+  return Boolean(getAuthToken("client"));
 });
 const userRole = computed(() => {
   authVersion.value;
-  try {
-    return JSON.parse(localStorage.getItem("user"))?.role || "";
-  } catch {
-    return "";
-  }
+  return getAuthUser("client")?.role || "";
 });
 const baseItems = [
   { path: "/", label: "首页" },
@@ -56,10 +53,10 @@ const baseItems = [
 const items = computed(() => (userRole.value === "teacher" ? [...baseItems, { path: "/teacher/courses", label: "教师课程资料" }] : baseItems));
 
 function logout() {
-  localStorage.removeItem("token");
-  localStorage.removeItem("user");
+  clearAuth("client");
   authVersion.value += 1;
   open.value = false;
+  emitAuthChange();
   router.push("/");
 }
 

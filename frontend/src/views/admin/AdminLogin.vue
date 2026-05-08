@@ -19,6 +19,7 @@
 import { ElMessage } from "element-plus";
 import { reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { emitAuthChange, setAuth } from "../../services/auth";
 import { api } from "../../services/api";
 import { loadDatabaseData, syncUser } from "../../services/store";
 
@@ -43,11 +44,10 @@ async function submit() {
     if (user.role !== "admin") {
       throw new Error("当前账号不是管理员，无法进入后台");
     }
-    localStorage.setItem("token", data.data.token);
-    localStorage.setItem("user", JSON.stringify(user));
+    setAuth("admin", data.data.token, user);
     syncUser(user);
     await loadDatabaseData();
-    window.dispatchEvent(new Event("storage"));
+    emitAuthChange();
     ElMessage.success("登录成功");
     router.push(route.query.redirect || "/admin/users/admin");
   } catch (error) {

@@ -8,7 +8,7 @@
         <el-option v-for="option in selectOptions" :key="option" :label="option" :value="option" />
       </el-select>
       <el-date-picker v-if="config.date" v-model="filters.date" type="daterange" range-separator="至" start-placeholder="开始时间" end-placeholder="结束时间" />
-      <button class="admin-btn" @click="page = 1">查询</button>
+      <button class="admin-btn" @click="handleSearch">查询</button>
       <button class="admin-btn" @click="deleteSelected">删除</button>
       <button v-if="config.add" class="admin-btn" @click="showAdd">添加</button>
     </div>
@@ -65,6 +65,13 @@
     </el-dialog>
 
     <el-dialog v-model="addVisible" :title="`添加${pageTitle}`" width="min(640px, 92vw)">
+      <div v-if="props.type === 'videos'" class="video-upload-box">
+        <label class="admin-btn video-upload-trigger">
+          选择本地视频
+          <input type="file" accept="video/*" :disabled="uploadingVideo" @change="handleVideoUpload" />
+        </label>
+        <p class="video-upload-hint">{{ addForm.video_url ? `已上传：${addForm.video_url}` : "支持 mp4、webm、ogg、mov、m4v，保存后前台在线视频列表可播放。" }}</p>
+      </div>
       <el-form label-width="110px">
         <el-form-item v-for="field in formFields" :key="field.prop" :label="field.label">
           <el-input v-model="addForm[field.prop]" :placeholder="`请输入${field.label}`" />
@@ -88,8 +95,9 @@
 
 <script setup>
 import { ElMessage } from "element-plus";
-import { computed, reactive, ref, watch } from "vue";
-import { addRow, getComments, removeRows, saveStore, store, updateRow } from "../../services/store";
+import { computed, onMounted, reactive, ref, watch } from "vue";
+import { api } from "../../services/api";
+import { addRow, getComments, loadDatabaseData, refreshUsers, removeRows, saveStore, store, updateRow } from "../../services/store";
 
 const props = defineProps({
   type: { type: String, required: true },
@@ -145,6 +153,7 @@ const configs = {
   videos: {
     title: "在线视频管理",
     inputs: [{ key: "keyword", label: "视频名称搜索" }, { key: "type", label: "视频类型搜索" }],
+    add: true,
     comment: true,
     columns: [
       { prop: "teacher_user", label: "教师用户" },
@@ -223,6 +232,7 @@ const currentRow = ref(null);
 const auditForm = reactive({ pay_state: "" });
 const addForm = reactive({});
 const comments = ref([]);
+const uploadingVideo = ref(false);
 const userTitleMap = {
   admin: "管理员",
   student: "学生用户",
@@ -230,8 +240,36 @@ const userTitleMap = {
 };
 const pageTitle = computed(() => (props.type === "users" && props.userRole ? userTitleMap[props.userRole] : config.value.title));
 const selectOptions = computed(() => config.value.selectOptions || ["已发布", "待审核"]);
-const formFields = computed(() => config.value.columns.filter((column) => !column.image && !["create_time", "update_time"].includes(column.prop)).slice(0, 8));
-const detailFields = computed(() => config.value.columns);
+const formFields = computed(() => {
+  if (props.type === "videos") {
+    return [
+      { prop: "teachers_name", label: "教师姓名" },
+      { prop: "video_name", label: "视频名称" },
+      { prop: "video_duration", label: "视频时长" },
+      { prop: "video_origin", label: "视频产地" },
+      { prop: "video_type", label: "视频类型" },
+      { prop: "video_content", label: "视频简介" },
+      { prop: "video_poster", label: "视频海报" }
+    ];
+  }
+  if (props.type === "notices") {
+    return [
+      { prop: "title", label: "公告标题" },
+      { prop: "category", label: "公告分类" },
+      { prop: "content", label: "公告内容" }
+    ];
+  }
+  return config.value.columns.filter((column) => !column.image && !["create_time", "update_time"].includes(column.prop)).slice(0, 8);
+});
+const detailFields = computed(() => {
+  if (props.type === "videos") {
+    return [...config.value.columns, { prop: "video_content", label: "视频简介" }, { prop: "video_url", label: "视频地址" }];
+  }
+  if (props.type === "notices") {
+    return [...config.value.columns, { prop: "content", label: "公告内容" }, { prop: "publish_state", label: "发布状态" }];
+  }
+  return config.value.columns;
+});
 const filtered = computed(() => {
   let rows = store[props.type] || [];
   if (props.type === "users" && props.userRole) {
@@ -253,6 +291,13 @@ watch([filtered, pageSize], () => {
     page.value = 1;
   }
 });
+
+async function handleSearch() {
+  page.value = 1;
+  if (props.type === "users") {
+    await refreshUsers();
+  }
+}
 
 function deleteSelected() {
   if (!selectedRows.value.length) {
@@ -289,11 +334,76 @@ function showAdd() {
   formFields.value.forEach((field) => {
     addForm[field.prop] = "";
   });
+  if (props.type === "videos") {
+    addForm.video_url = "";
+    addForm.video_origin = "本地上传";
+    addForm.video_duration = "本地视频";
+  }
   addVisible.value = true;
 }
 
-function confirmAdd() {
+async function handleVideoUpload(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  if (!file.type.startsWith("video/")) {
+    ElMessage.warning("请选择视频文件");
+    event.target.value = "";
+    return;
+  }
+  uploadingVideo.value = true;
+  try {
+    const fd = new FormData();
+    fd.append("file", file);
+    const { data } = await api.post("/upload/", fd, { headers: { "Content-Type": "multipart/form-data" } });
+    const path = data?.data?.path || "";
+    if (!path) throw new Error("上传成功但后端未返回视频地址");
+    const filename = file.name.replace(/\.[^.]+$/, "");
+    addForm.video_url = path;
+    addForm.video_name = addForm.video_name || filename;
+    addForm.video_type = addForm.video_type || file.type || "视频";
+    addForm.video_origin = addForm.video_origin || "本地上传";
+    addForm.video_duration = addForm.video_duration || "本地视频";
+    addForm.video_poster = addForm.video_poster || "https://dummyimage.com/640x360/993380/ffffff&text=Video";
+    ElMessage.success("视频上传成功");
+  } catch (error) {
+    addForm.video_url = "";
+    ElMessage.error(error?.response?.data?.message || error?.message || "视频上传失败，请确认后端服务正常并已登录管理员账号");
+  } finally {
+    uploadingVideo.value = false;
+    event.target.value = "";
+  }
+}
+
+async function confirmAdd() {
   const row = { ...addForm };
+  if (props.type === "videos") {
+    if (!row.video_url) {
+      ElMessage.warning("请先选择并上传本地视频");
+      return;
+    }
+    if (!row.video_name) {
+      ElMessage.warning("请输入视频名称");
+      return;
+    }
+    try {
+      await api.post("/videos/", {
+        teachers_name: row.teachers_name || "管理员",
+        video_name: row.video_name,
+        video_duration: row.video_duration || "本地视频",
+        video_origin: row.video_origin || "本地上传",
+        video_type: row.video_type || "视频",
+        video_content: row.video_content || "",
+        video_poster: row.video_poster || "https://dummyimage.com/640x360/993380/ffffff&text=Video",
+        video_url: row.video_url
+      });
+      await loadDatabaseData();
+      addVisible.value = false;
+      ElMessage.success("视频已添加，并同步到前台");
+    } catch (error) {
+      ElMessage.error(error?.response?.data?.message || "视频保存失败，请确认已登录管理员账号");
+    }
+    return;
+  }
   if (props.type === "users") {
     row.role = props.userRole || "student";
     row.group = userTitleMap[row.role] || row.group || "学生用户";
@@ -340,7 +450,7 @@ function confirmAdd() {
     row.likes = 0;
     row.hits = 0;
   }
-  addRow(props.type, row);
+  await addRow(props.type, row);
   addVisible.value = false;
   ElMessage.success("添加成功，客户端数据已同步");
 }
@@ -357,6 +467,12 @@ watch(
   () => saveStore(),
   { deep: true }
 );
+
+onMounted(() => {
+  if (props.type === "users") {
+    refreshUsers();
+  }
+});
 </script>
 
 <style scoped>
@@ -364,5 +480,31 @@ watch(
   height: 30px;
   padding: 0 10px;
   margin-right: 6px;
+}
+
+.video-upload-box {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.video-upload-trigger {
+  position: relative;
+  width: fit-content;
+}
+
+.video-upload-trigger input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.video-upload-hint {
+  margin: 0;
+  color: #666;
+  font-size: 13px;
+  line-height: 1.6;
+  word-break: break-all;
 }
 </style>

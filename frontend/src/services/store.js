@@ -1,5 +1,6 @@
 import { reactive } from "vue";
 import { api } from "./api";
+import { getAuthUser, hasAuth } from "./auth";
 import { courses, forums, news, notices, videos } from "./mock";
 
 const STORAGE_KEY = "online-education-store";
@@ -131,6 +132,22 @@ export function saveStore() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
 }
 
+function syncStoreFromLocalStorage() {
+  const next = load();
+  Object.keys(store).forEach((key) => {
+    delete store[key];
+  });
+  Object.assign(store, next);
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (event) => {
+    if (event.key === STORAGE_KEY || event.key === VERSION_KEY) {
+      syncStoreFromLocalStorage();
+    }
+  });
+}
+
 function assignRows(type, rows) {
   store[type] = rows;
   saveStore();
@@ -156,10 +173,13 @@ function videoFromApi(item) {
     id: item.online_video_id,
     name: item.video_name,
     teacher: item.teachers_name,
+    teacher_user: item.teachers_name,
     type: item.video_type,
     duration: item.video_duration,
     origin: item.video_origin,
-    poster: item.video_poster
+    poster: item.video_poster,
+    src: item.video_url || "",
+    video_url: item.video_url || ""
   };
 }
 
@@ -183,6 +203,21 @@ function newsFromApi(item) {
     cover: item.cover_image,
     content: item.content || item.summary,
     date: item.create_time
+  };
+}
+
+function userFromApi(item) {
+  const groupMap = {
+    admin: "管理员",
+    student: "学生用户",
+    teacher: "教师用户"
+  };
+  return {
+    ...item,
+    group: groupMap[item.role] || "学生用户",
+    avatar: item.avatar || pic,
+    create_time: item.date_joined || item.create_time || "",
+    date_joined: item.date_joined || ""
   };
 }
 
@@ -225,12 +260,25 @@ export async function loadDatabaseData() {
     api.get("/notices/", { params: { page_size: 100 } }).then(({ data }) => assignRows("notices", data.data.items || [])),
     api.get("/banners/").then(({ data }) => assignRows("banners", data.data.items || []))
   ];
-  if (localStorage.getItem("token")) {
+  if (hasAuth("client")) {
     requests.push(api.get("/interactions/", { params: { kind: "like" } }).then(({ data }) => assignRows("likes", (data.data.items || []).map(interactionFromApi))));
     requests.push(api.get("/interactions/", { params: { kind: "favorite" } }).then(({ data }) => assignRows("favorites", (data.data.items || []).map(interactionFromApi))));
     requests.push(api.get("/comments/").then(({ data }) => assignRows("comments", (data.data.items || []).map(commentFromApi))));
   }
+  if (hasAuth("admin")) {
+    requests.push(refreshUsers());
+  }
   await Promise.allSettled(requests);
+}
+
+export async function refreshUsers() {
+  try {
+    const { data } = await api.get("/admin/users/", { params: { page_size: 100 } });
+    assignRows("users", (data.data.items || []).map(userFromApi));
+  } catch {
+    return store.users;
+  }
+  return store.users;
 }
 
 export async function refreshBanners() {
@@ -286,7 +334,8 @@ function persistAdd(type, row) {
         video_origin: row.video_origin || row.origin || "",
         video_type: row.video_type || row.type || "",
         video_content: row.video_content || "",
-        video_poster: row.video_poster || row.poster || ""
+        video_poster: row.video_poster || row.poster || "",
+        video_url: row.video_url || row.src || ""
       }),
     forums: () =>
       api.post("/forums/", {
@@ -307,6 +356,18 @@ function persistAdd(type, row) {
         author: row.author || ""
       }),
     banners: () => api.post("/admin/banners/", { title: row.title || "轮播图", image: row.image || "", link: row.link || "", sort: Number(row.sort || 0) })
+    ,
+    notices: () =>
+      api.post("/notices/", {
+        title: row.title || "",
+        category: row.category || "",
+        content: row.content || "",
+        publish_state: row.publish_state || "已发布"
+      }).then(({ data }) => {
+        Object.assign(row, data.data || {});
+        saveStore();
+        return data.data;
+      })
   };
   map[type]?.().catch(() => {});
 }
@@ -317,7 +378,8 @@ function persistRemove(type, ids) {
     courses: () => Promise.all(ids.map((id) => api.delete(`/courses/${id}/`))),
     videos: () => Promise.all(ids.map((id) => api.delete(`/videos/${id}/`))),
     forums: () => Promise.all(ids.map((id) => api.delete(`/forums/${id}/`))),
-    news: () => Promise.all(ids.map((id) => api.delete(`/news/${id}/`)))
+    news: () => Promise.all(ids.map((id) => api.delete(`/news/${id}/`))),
+    notices: () => Promise.all(ids.map((id) => api.delete(`/notices/${id}/`)))
   };
   map[type]?.().catch(() => {});
 }
@@ -331,6 +393,8 @@ function persistUpdate(type, row) {
     api.patch(`/forums/${row.forum_id}/`, row).catch(() => {});
   } else if (type === "news" && row.news_id) {
     api.patch(`/news/${row.news_id}/`, row).catch(() => {});
+  } else if (type === "notices" && row.id) {
+    api.patch(`/notices/${row.id}/`, row).catch(() => {});
   }
 }
 
@@ -362,11 +426,7 @@ export function syncUser(user) {
 }
 
 export function currentUser() {
-  try {
-    return JSON.parse(localStorage.getItem("user")) || null;
-  } catch {
-    return null;
-  }
+  return getAuthUser("client");
 }
 
 export function addComment(targetType, targetId, content) {
